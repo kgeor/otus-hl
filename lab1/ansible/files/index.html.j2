@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>Test Website</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+		<style type="text/css">
+			/*<![CDATA[*/
+			body {
+				background-color: #FAF5F5;
+				color: #000;
+				text-align: center;
+				font-size: 1.5em;
+				font-family: monospace;
+				margin: 0;
+				padding: 0;
+			}
+			
+			h1 {
+				text-align: center;
+				margin: 0;
+				padding: 0.6em 2em 0.4em;
+				background-color: #086408;
+				color: #fff;
+				font-weight: normal;
+				font-size: 1.75em;
+				/* border-bottom: 2px solid #000; */
+			}
+			h1 strong {
+				font-weight: bold;
+			}
+			/*]]>*/
+		</style>
+    </head>
+
+    <body>
+        <h1>Just static <strong>Test Page</strong></h1>
+        <div class="content">
+			<div class="content-middle">
+				<p>This page is served by NGINX running on <strong>{{ ansible_hostname }}</strong>. If you can read this page, it means that the HTTP server installed at this site is working properly.</p>
+			</div>
+			<hr />
+		</div>
+    </body>
+</html>

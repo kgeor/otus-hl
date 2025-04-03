@@ -1,0 +1,21 @@
+---
+- hosts: all
+  become: true
+  tasks:
+    - name: Install packages
+      ansible.builtin.package:
+        name: nginx
+        state: present
+
+    - name: Copy custom index page
+      ansible.builtin.template:
+        src: files/index.html.j2
+        dest: /usr/share/nginx/html/index.html
+        owner: nginx
+        group: nginx
+
+    - name: Start and enable nginx
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: yes
