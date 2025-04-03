@@ -1,0 +1,149 @@
+---
+- name: Enable additional HA repos
+  community.general.dnf_config_manager:
+    name: "{{ item }}"
+    state: enabled
+  loop:
+    - highavailability
+    - resilientstorage
+
+- name: Install packages for HA LVM
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+    update_cache: yes
+  loop:
+    - dlm
+    - gfs2-utils
+    - lvm2
+    - lvm2-lockd
+- name: Set locking params in LVM configuration
+  ansible.builtin.replace:
+    path: /etc/lvm/lvm.conf
+    regexp: "{{ item.old }}"
+    replace: "{{ item.new }}"
+  loop:
+    - { old: '^(\s+)(#*\s+)locking_type(\s+.*)?$', new: '\1locking_type = 1'}
+    - { old: '^(\s+)(#*\s+)use_lvmlockd(\s+.*)?$', new: '\1use_lvmlockd = 1'}
+    #- Rebuild initramfs
+
+# - name: Enable and start lvmlockd service
+#   ansible.builtin.service:
+#     name: "{{ item }}"
+#     state: started
+#     enabled: true
+#   loop:      
+#     - multipathd
+#     - lvmlockd
+
+- name: Create dlm resource
+  run_once: true
+  pcs_resource:
+    name: 'dlm'
+    resource_type: 'ocf:pacemaker:controld'
+    options: >
+      op monitor interval=30s on-fail=fence clone meta interleave=true ordered=true
+
+# - name: Clone resource group
+#   run_once: true
+#   pcs_resource:
+#     name: 'locking'
+#     resource_type: 'ocf:heartbeat:lvmlockd'
+#     options: 'group
+
+- name: Create lvmlockd resource
+  run_once: true
+  pcs_resource:
+    name: 'lvmlockd'
+    resource_type: 'ocf:heartbeat:lvmlockd'
+    options: 'op monitor interval=30s on-fail=fence clone meta interleave=true ordered=true'
+
+- name: Set order constraint
+  run_once: true
+  pcs_constraint_order:
+    resource1: 'dlm-clone'
+    resource2: 'lvmlockd-clone'
+
+- name: Set colocation constraint
+  run_once: true
+  pcs_constraint_colocation:
+    resource1: 'dlm-clone'
+    resource2: 'lvmlockd-clone'
+
+- name: Create clustered VG
+  community.general.lvg:
+    pvs: "{{ lvm_conf.disk }}"
+    vg: "{{ lvm_conf.vg_name }}"
+    vg_options: '--shared'
+  when: inventory_hostname == groups['gfs_node'][0]
+
+- name: Add clustered VG on other nodes
+  community.general.lvg:
+    pvs: "{{ lvm_conf.disk }}"
+    vg: "{{ lvm_conf.vg_name }}"
+    vg_options: '--lockstart'
+  when: inventory_hostname != groups['gfs_node'][0]
+  notify: restart pacemaker
+
+- name: Create LV on clustered VG
+  community.general.lvol:
+    vg: "{{ lvm_conf.vg_name }}"
+    lv: "{{ lvm_conf.lv_name }}"
+    size: "{{ lvm_conf.lv_size }}"
+  when: inventory_hostname == groups['gfs_node'][0]
+
+- name: Create FS
+  # run_once: true  
+  command: mkfs.gfs2 -j "{{ ansible_play_hosts | length }}" -p lock_dlm -t "{{ cluster_name }}":"{{ fs_name }}" -O /dev/"{{ lvm_conf.vg_name }}"/"{{ lvm_conf.lv_name }}"
+  register: result
+  failed_when:
+  - result.rc != 0 
+  - '"Device or resource busy" not in result.stderr'
+  when: inventory_hostname == groups['gfs_node'][0]
+
+- name: Create LVM resource
+  # run_once: true
+  pcs_resource:
+    name: 'sharedlv'
+    resource_type: 'ocf:heartbeat:LVM-activate'
+    options: 'vgname="{{ lvm_conf.vg_name }}" lvname="{{ lvm_conf.lv_name }}" activation_mode=shared vg_access_mode=lvmlockd clone interleave=true'
+  when: inventory_hostname == groups['gfs_node'][0]
+
+- name: Set resource order constraint
+  run_once: true
+  pcs_constraint_order:
+    resource1: 'lvmlockd-clone'
+    resource2: 'sharedlv-clone'
+
+- name: Set resource colocation constraint
+  run_once: true
+  pcs_constraint_colocation:
+    resource1: 'lvmlockd-clone'
+    resource2: 'sharedlv-clone'
+
+- name: Create ClusterFS resource
+  # run_once: true  
+  pcs_resource:
+    name: 'clusterfs'
+    resource_type: 'ocf:heartbeat:Filesystem'
+    options: 'device=/dev/"{{ lvm_conf.vg_name }}"/"{{ lvm_conf.lv_name }}" directory=/mnt/gfs2 fstype=gfs2 options=noatime op monitor interval=10s on-fail=fence clone interleave=true'
+  when: inventory_hostname == groups['gfs_node'][0]
+
+- name: Set resource order constraint
+  run_once: true
+  pcs_constraint_order:
+    resource1: 'sharedlv-clone'
+    resource2: 'clusterfs-clone'
+
+- name: Set resource colocation constraint
+  run_once: true
+  pcs_constraint_colocation:
+    resource1: 'sharedlv-clone'
+    resource2: 'clusterfs-clone'
+
+- name: Restart pacemaker
+  ansible.builtin.service:
+    name: pacemaker
+    state: restarted
+  # when: inventory_hostname != groups['gfs_node'][0]
+

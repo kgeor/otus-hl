@@ -1,0 +1,28 @@
+wwn_prefix: 'iqn.2024-12.local.lab'
+iscsi_targets:
+  - wwn: "{{ wwn_prefix }}:{{ hostvars[groups['iscsi_storage'] | first]['ansible_facts']['hostname'] }}" #{{ ansible_facts['nodename'] }}
+    disks:
+      - name: gfs_shared
+        path: /dev/vdb
+        type: block
+        lunid: 0
+    
+    initiators: "[ {% for host in groups['gfs_node'] %} '{{ wwn_prefix }}:{{ hostvars[host]['ansible_hostname'] }}', {% endfor %} ]"
+      # - name: 2024-11.local.lab:node1
+        # authentication:
+          # userid: node1
+          # password: passwd1
+        # mapped_luns:
+      # - mapped_lunid: 0
+        # lunid: 0
+
+portal:
+  ip: "{{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}" #"{{ hostvars[groups['iscsi_storage'] | first]['ansible_facts']['default_ipv4']['address'] }}"
+initiator: "{{ wwn_prefix }}:{{ ansible_hostname }}"
+target:
+  discover: true
+  login: true
+  portal: 
+    - "{{ hostvars[groups['iscsi_storage'] | first]['ansible_facts']['all_ipv4_addresses'][0] }}"
+    - "{{ hostvars[groups['iscsi_storage'] | first]['ansible_facts']['all_ipv4_addresses'][1] }}"
+  name: "{{ iscsi_targets.0.wwn }}"

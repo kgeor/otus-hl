@@ -1,0 +1,81 @@
+---
+- name: Enable the needed repository 
+  community.general.dnf_config_manager:
+    name: "{{ item }}"
+    state: enabled
+  loop:
+    - highavailability
+
+- name: Install needed tools for clustering
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+    update_cache: yes
+  loop:
+    - pacemaker
+    - pcs
+    - pcp-zeroconf
+    - resource-agents
+    - mkpasswd
+
+- name: Enable and start PCSD service
+  ansible.builtin.service:
+    name: pcsd
+    enabled: true
+    state: started
+
+- name: Create cluster user system group
+  ansible.builtin.group:
+    name: "{{ cluster_group }}"
+    state: 'present'
+
+- name: Create for cluster user password hash
+  run_once: true
+  ansible.builtin.shell: mkpasswd -m sha-512 -S {{ ansible_hostname | replace('-', 'x') | truncate(16, True, '', 0) }} {{ cluster_user_pass }}
+  register: pass_hash
+
+- name: Create system user for cluster
+  ansible.builtin.user:
+    name: "{{ cluster_user }}"
+    state: 'present'
+    password: "{{ pass_hash.stdout }}"
+    groups: "{{ cluster_group }}"
+    comment: 'HA Cluster Administrator'
+
+- name: Authorize cluster nodes
+  pcs_auth:
+    node_name: "{{ hostvars[item]['ansible_hostname'] }}"
+    username: "{{ cluster_user }}"
+    password: "{{ cluster_user_pass }}"
+    state: present
+  loop: "{{ ansible_play_hosts }}"
+  run_once: true
+
+- name: Init cluster
+  pcs_cluster:
+    node_list: >-
+      {% for item in ansible_play_hosts %}{{ hostvars[item]['ansible_hostname'] }} {% endfor %}
+    cluster_name: "{{ cluster_name }}"
+    state: present
+    transport: 'default'
+    allowed_node_changes: add
+  run_once: true
+
+- name: Start cluster services on all nodes
+  service:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop:
+    - pacemaker
+    - corosync
+    - pcsd
+
+- name: Setup fencing
+  include_tasks: fencing.yml
+
+- name: Set cluster no-quorum-policy
+  run_once: true 
+  pcs_property:
+    name: 'no-quorum-policy'
+    value: 'freeze'

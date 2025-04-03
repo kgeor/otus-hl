@@ -1,0 +1,2 @@
+cluster_name: 'gfs-cluster'
+fs_name: 'ha_data'

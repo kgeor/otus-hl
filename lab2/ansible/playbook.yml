@@ -1,0 +1,59 @@
+- hosts: all
+  become: true
+  pre_tasks:
+  # - name: Discovered targets
+  #   ansible.builtin.debug:
+  #     msg: "{% for node in ansible_play_hosts %}{{ node }}:{{ loop.index }}{% if not loop.last %};{% endif %}{% endfor %}"
+  # - ansible.builtin.pause:
+
+  - name: Set static hostname
+    ansible.builtin.hostname:
+      name: "{{ inventory_hostname }}"
+      
+  - name: Set timezone
+    community.general.timezone:
+      name: Europe/Moscow
+
+  - name: Add IP address of all hosts to all hosts
+    ansible.builtin.lineinfile:
+      dest: /etc/hosts
+      regexp: '.*{{ item }}$'
+      line: "{{ hostvars[item]['ansible_facts']['default_ipv4']['address'] }} {{item}}"
+      state: present
+    loop: "{{ groups.all }}"
+  
+  roles: 
+    - iscsi
+
+- hosts: gfs_node
+  become: true
+  roles:
+    - pcs
+    - gfs
+  post_tasks:
+    - name: Waiting for GFS become available
+      ansible.builtin.wait_for:
+        path: /mnt/gfs2
+        delay: 10
+        
+    - name: Get info about cluster resources
+      ansible.builtin.command: pcs status
+      register: cluster_state
+      when: inventory_hostname == groups['gfs_node'][0]
+
+    - name: Print info about cluster resources
+      run_once: true
+      debug: msg="{{ cluster_state.stdout_lines }}"
+
+    - name: Create test file on 1st node
+      ansible.builtin.file:
+        path: /mnt/gfs2/check
+        state: touch
+      when: inventory_hostname == groups['gfs_node'][0]
+
+    - name: Check that this file exists on any GFS cluster node
+      ansible.builtin.stat:
+        path: /mnt/gfs2/check
+      register: result
+      failed_when: not result.stat.exists
+
