@@ -69,6 +69,7 @@ resource "yandex_compute_disk" "boot-disk" {
 }
 
 resource "yandex_compute_instance" "vm" {
+  name        = "lab1-nginx"
   hostname    = "lab1-nginx"
   platform_id = "standard-v3"
   zone        = var.zone

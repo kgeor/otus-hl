@@ -1,0 +1,8 @@
+---
+- name: restart db
+  service:
+    name: "{{ db_service_name }}"
+    state: restarted
+
+- name: secure db
+  include_tasks: tasks/secure_db.yml

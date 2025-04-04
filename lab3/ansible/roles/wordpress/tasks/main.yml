@@ -1,0 +1,145 @@
+---
+- name: Add NGINX repo
+  ansible.builtin.yum_repository:
+    name: nginx-stable
+    description: nginx stable repo
+    baseurl: http://nginx.org/packages/centos/$releasever/$basearch/
+    gpgkey: https://nginx.org/keys/nginx_signing.key
+    gpgcheck: true
+    module_hotfixes: true
+
+- name: Import GPG key for Remi repo
+  ansible.builtin.rpm_key:
+    state: present
+    key: https://rpms.remirepo.net/enterprise/9/RPM-GPG-KEY-remi
+  notify: 
+    - reset dnf php module
+    - enable remi repo
+
+- name: Install Remi repo
+  ansible.builtin.package:
+    name: https://rpms.remirepo.net/enterprise/remi-release-9.rpm
+    state: present
+  notify: 
+    - reset dnf php module
+    - enable remi repo
+
+- meta: flush_handlers
+
+- name: Install packages
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  loop:
+     #- php
+     - php-mysqlnd
+     - php-curl
+     - php-gd
+     - php-intl
+     - php-mbstring
+     #- php-imagick
+     - php-soap
+     - php-xml
+     - php-zip
+     - php-fpm
+     - nginx
+
+- name: Set PHP params in php.ini
+  ansible.builtin.lineinfile:
+    path: /etc/php.ini
+    search_string: 'cgi.fix_pathinfo='
+    line: cgi.fix_pathinfo=0
+
+- name: Generate config for php-fpm
+  ansible.builtin.template:
+    src: www.conf.j2
+    dest: /etc/php-fpm.d/www.conf
+  notify: restart php-fpm
+
+- name: Create directory for site's files
+  ansible.builtin.file:
+    path: /var/www/sites
+    state: directory
+    owner: nginx
+    group: nginx
+
+- stat: path=/var/www/sites/wordpress
+  register: st
+
+- name: Get WordPress distrib
+  ansible.builtin.unarchive:
+    src: "https://wordpress.org/wordpress-{{ wordpress_version }}.tar.gz"
+    dest: /var/www/sites
+    remote_src: true
+  when: not st.stat.exists
+
+- name: Set wp-config
+  ansible.builtin.template:
+    src: wp-config.php.j2
+    dest: /var/www/sites/wordpress/wp-config.php
+    owner: nginx
+    group: nginx
+
+- name: Set locking params in LVM configuration
+  ansible.builtin.replace:
+    path: /var/www/sites/wordpress/wp-admin/install.php
+    regexp: "( 'WordPress &rsaquo; Installation' )"
+    replace: "( 'WordPress &rsaquo; Installation on {{ ansible_hostname }}' )"
+
+- name: Set ownership recursively
+  ansible.builtin.file:
+    path: /var/www/sites
+    owner: nginx
+    group: nginx
+    recurse: true
+
+- name: Create site's config directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+  loop: 
+    - /etc/nginx/sites-available
+    - /etc/nginx/sites-enabled 
+
+- name: Generate nginx.conf
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+    group: root
+    owner: root
+    mode: 0644
+  notify: restart nginx
+    
+- name: Configure sites
+  ansible.builtin.template:
+    src: wordpress.conf.j2
+    dest: /etc/nginx/sites-available/wordpress.conf
+    group: root
+    owner: root
+    mode: 0644
+  notify: restart nginx
+
+- name: Symlink sites-available to sites-enabled
+  ansible.builtin.file:
+    src: "/etc/nginx/sites-available/wordpress.conf"
+    dest: "/etc/nginx/sites-enabled/wordpress.conf"
+    state: link
+  notify: restart nginx
+
+- name: Set httpd_can_network_connect flag ON (for php-fpm to MariaDB connections)
+  ansible.posix.seboolean:
+    name: httpd_can_network_connect
+    state: true
+    persistent: true
+
+- name: Start and enable nginx and php-fpm service
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  loop: 
+    - nginx
+    - php-fpm
