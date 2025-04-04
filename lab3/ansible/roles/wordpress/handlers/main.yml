@@ -1,0 +1,14 @@
+---
+- name: reset dnf php module
+  ansible.builtin.shell: dnf --assumeyes module reset php
+
+- name: enable remi repo
+  ansible.builtin.shell: "dnf --assumeyes module enable php:remi-{{ php_version }}"
+
+- name: restart nginx
+  ansible.builtin.command: nginx -s reload
+
+- name: restart php-fpm
+  ansible.builtin.service:
+    name: php-fpm
+    state: restarted

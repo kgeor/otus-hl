@@ -1,0 +1,35 @@
+---
+- name: Update root password
+  community.mysql.mysql_user:
+    name: root
+    host_all: true
+    # host: localhost
+    login_unix_socket: /var/lib/mysql/mysql.sock
+    password: "{{ mariadb_root_password | default('passwd') }}"
+    state: present
+
+# Remove the test mysql DB
+- name: Remove mysql test db
+  community.mysql.mysql_db:
+    login_unix_socket: /var/lib/mysql/mysql.sock
+    login_password: "{{ mariadb_root_password | default('passwd') }}"
+    name: test
+    state: absent
+
+# Remove anonymous users from all host's
+- name: Remove anonymous users
+  community.mysql.mysql_user:
+    name: ''
+    host_all: true
+    login_unix_socket: /var/lib/mysql/mysql.sock
+    login_password: "{{ mariadb_root_password | default('passwd') }}"
+    state: absent
+    host: localhost
+    
+# Remove remote acces as a root from all host's
+- name: Remove remote root
+  community.mysql.mysql_query:
+    login_unix_socket: /var/lib/mysql/mysql.sock
+    login_password: "{{ mariadb_root_password | default('passwd') }}"
+    query:
+      - DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1')

@@ -1,0 +1,3 @@
+---
+- name: reload angie
+  ansible.builtin.command: angie -s reload

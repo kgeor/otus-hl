@@ -1,0 +1,9 @@
+---
+nginx_worker_proc: auto
+nginx_worker_conn: 1024
+nginx_epoll_events : 512
+nginx_gzip_mode: "on"
+nginx_gzip_level: 4
+php_version: "8.3"
+wordpress_version: "6.7.2"
+db_host: "{{ hostvars[groups['db'][0]]['ansible_facts']['default_ipv4']['address'] }}"

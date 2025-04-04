@@ -1,0 +1,10 @@
+---
+#Nginx conf
+lb_algorithm: 'hash $request_uri'
+nginx_worker_proc: auto
+nginx_worker_conn: 1024
+nginx_epoll_events : 512
+nginx_gzip_mode: 'on'
+nginx_gzip_level: 4
+site_dir: wordpress
+host: "{{ inventory_hostname_short }}"
