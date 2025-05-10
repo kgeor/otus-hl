@@ -1,0 +1,70 @@
+
+- name: "Install packages for targetcli (LIO)"
+  ansible.builtin.package:
+    name: targetcli
+    state: present
+
+- name: Start and enable the targetcli service
+  ansible.builtin.service:
+    name: target
+    enabled: true
+    state: started
+
+- name: Create backstore objects for target
+  targetcli_backstore:
+    backstore_type: "{{ item.1.type | default('block') }}"
+    backstore_name: "{{ item.1.name }}"
+    options: "{{ item.1.path }}"
+    state: present
+  loop: "{{ iscsi_targets | d([]) | subelements('disks') }}"
+  notify:
+    - Save targetcli configuration
+
+- name: Create iSCSI target
+  targetcli_iscsi:
+    wwn: "{{ item.wwn }}"
+    state: present
+  loop: "{{ iscsi_targets }}"
+  notify:
+    - Save targetcli configuration
+
+- name: define ACLs for iSCSI target
+  targetcli_iscsi_acl:
+    wwn: "{{ item.0.wwn }}"
+    initiator_wwn: "{{ item.1 }}"
+  loop: "{{ iscsi_targets | d([]) | subelements('initiators') }}"
+  notify:
+    - Save targetcli configuration
+
+- name: Assign LUNs to for target
+  targetcli_iscsi_lun:
+    wwn: "{{ item.0.wwn }}"
+    backstore_type: "{{ item.1.type | default('block') }}"
+    backstore_name: "{{ item.1.name }}"
+  loop: "{{ iscsi_targets | d([]) | subelements('disks') }}"
+  notify:
+    - Save targetcli configuration
+
+# - name: Disable auto add mapped luns
+#   targetcli_preferences:
+#     preference: 'auto_add_mapped_luns'
+#     value: 'false'
+
+# - name: Remove default portal for {{ iscsi_targets.0.wwn }}
+#   targetcli_iscsi_portal:
+#     wwn: "{{ item.wwn }}"
+#     portal_ip: "0.0.0.0"
+#     state: absent
+#   loop: "{{ iscsi_targets }}"
+#   notify:
+#     - Save targetcli configuration
+#   #when: target.state|default("present") == "present"
+
+# - name: Create portal for target {{ iscsi_targets.0.wwn }}
+#   targetcli_iscsi_portal:
+#     wwn: "{{ item.wwn }}"
+#     portal_ip: "{{ portal.ip }}"
+#     #port: "{{ portal.port | default(omit) }}"
+#   loop: "{{ iscsi_targets }}"
+#   notify:
+#     - Save targetcli configuration

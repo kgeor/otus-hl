@@ -1,0 +1,5 @@
+---
+#cluster_name: 'gfs-cluster'
+cluster_user_pass: 'derparol'
+cluster_group: 'pcs'
+cluster_user: 'hacluster'

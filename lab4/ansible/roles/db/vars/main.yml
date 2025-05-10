@@ -1,0 +1,4 @@
+---
+mariadb_root_password: derparol
+db_service_name: mariadb
+db_version: '11.7'

@@ -1,0 +1,61 @@
+---
+- name: Add Angie repo
+  ansible.builtin.yum_repository:
+    name: angie
+    description: Angie repo
+    baseurl: https://download.angie.software/angie/almalinux/$releasever/
+    gpgkey: https://angie.software/keys/angie-signing.gpg.asc
+    gpgcheck: true
+
+- name: Install Angie
+  ansible.builtin.dnf:
+    name: 
+      - angie
+    state: present
+    update_cache: true
+  
+- name: Enable ANGIE service
+  ansible.builtin.service:
+    name: angie
+    state: started
+    enabled: yes
+
+- name: Create site's config directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+  loop: 
+    - /etc/angie/sites-available
+    - /etc/angie/sites-enabled 
+
+# - name: Pause until you can verify updates to an application were successful
+#   ansible.builtin.pause:
+  
+- name: Generate Angie config
+  ansible.builtin.template:
+    src: angie.conf.j2
+    dest: /etc/angie/angie.conf
+    # group: root
+    # owner: root
+    # mode: 0644
+    force: true
+  notify: reload angie
+
+- name: Configure sites
+  ansible.builtin.template:
+    src: rp_wordpress.conf.j2
+    dest: /etc/angie/sites-available/rp_wordpress.conf
+    group: root
+    owner: root
+    mode: 0644
+  notify: reload angie
+  
+- name: Symlink sites-available to sites-enabled
+  ansible.builtin.file:
+    src: /etc/angie/sites-available/rp_wordpress.conf
+    dest: "/etc/angie/sites-enabled/rp_wordpress.conf"
+    state: link
+  notify: reload angie

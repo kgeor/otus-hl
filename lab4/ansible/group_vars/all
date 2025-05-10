@@ -1,0 +1,4 @@
+wp_db: wordpress
+wp_db_user: wp
+wp_db_pass: pass
+sites_path: /mnt/gfs2

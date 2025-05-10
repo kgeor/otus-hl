@@ -1,0 +1,7 @@
+---
+lvm_conf:
+  disk: /dev/mapper/mpatha
+  vg_name: vg-clustered
+  vg_opts: --shared
+  lv_name: lv-clustered
+  lv_size: +100%FREE

@@ -1,0 +1,8 @@
+---
+- name: Setup targets
+  include_tasks: target.yml
+  when: inventory_hostname in groups[ "storage" ] 
+
+- name: Setup initiators
+  include_tasks: initiator.yml
+  when: inventory_hostname in groups[ "backend" ]

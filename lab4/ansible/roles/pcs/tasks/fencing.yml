@@ -1,0 +1,32 @@
+---
+- name: Install fence agent
+  ansible.builtin.package:
+    name:
+      #- fence-agents-scsi
+      - fence-agents-mpath
+    state: present
+
+- name: Check multipath service
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop:      
+    - multipathd
+
+- name: Configure fencing
+  run_once: true
+  pcs_resource:
+    name: 'mpath-fencing'
+    #resource_class: 'ocf'
+    resource_type: 'stonith:fence_mpath'
+    options: >
+      devices=/dev/mapper/mpatha pcmk_host_argument=key 
+      pcmk_host_map="{% for node in ansible_play_hosts %}{{ node }}:{{ loop.index }}{% if not loop.last %};{% endif %}{% endfor %}" 
+      pcmk_monitor_action=metadata pcmk_reboot_action=off op monitor interval=30s meta provides=unfencing
+
+- name: Set fencing (STONITH) cluster property
+  run_once: true
+  pcs_property:
+    name: 'stonith-enabled'
+    value:  'true'

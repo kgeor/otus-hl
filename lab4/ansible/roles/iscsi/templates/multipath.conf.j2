@@ -1,0 +1,10 @@
+defaults {
+        user_friendly_names yes
+        find_multipaths yes
+        #path_selector round-robin 0
+        path_grouping_policy multibus
+        reservation_key {{ groups['backend'].index(inventory_hostname) + 1 }}
+}
+
+blacklist {
+}

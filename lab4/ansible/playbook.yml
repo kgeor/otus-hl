@@ -1,0 +1,53 @@
+---
+- name: General setup
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Set hostname and /etc/hosts
+      block:
+        - name: Set static hostname
+          ansible.builtin.hostname:
+            name: "{{ inventory_hostname_short }}"
+        
+        - name: Add IP address of all hosts to all hosts
+          ansible.builtin.lineinfile:
+            dest: /etc/hosts
+            regexp: '.*{{ item }}$'
+            line: "{{ hostvars[item].ansible_facts.default_ipv4.address }} {{item}}"
+            state: present
+          #when: item != ansible_hostname
+          loop: "{{ groups.all }}"
+  
+- name: iSCSI storage setup
+  hosts: backend, storage
+  become: true
+  roles: 
+    - iscsi
+
+- name: GFS2 cluster setup
+  hosts: backend
+  become: true
+  roles:
+    - pcs
+    - gfs
+
+- name: Setup MariaDB
+  hosts: db
+  become: true
+  roles:
+    - db
+  
+- name: Setup backend servers with WordPress
+  hosts: backend
+  become: true
+  tags: backend
+  roles:
+    - wordpress
+
+- name: Setup NGINX reverse-proxy
+  hosts: nginx_lb
+  become: true
+  tags: frontend
+  roles:
+    - nginx-rp

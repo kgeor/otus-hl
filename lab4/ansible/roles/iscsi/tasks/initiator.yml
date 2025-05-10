@@ -1,0 +1,61 @@
+---
+- name: Install open-iscsi 
+  ansible.builtin.package:
+    name: iscsi-initiator-utils
+    state: present
+
+- name: Replace initiator IQN 
+  ansible.builtin.copy:
+    dest: /etc/iscsi/initiatorname.iscsi
+    content:  |
+      InitiatorName={{ initiator }}
+  notify: Restart iscsi initiator
+
+- name: Enable iscsi initiator service
+  ansible.builtin.service:
+    name: iscsid
+    enabled: true
+
+- name: Install multipath
+  ansible.builtin.package:
+    name: device-mapper-multipath
+    state: present
+
+- name: Generate multipath.conf
+  ansible.builtin.template:
+    src: multipath.conf.j2
+    dest: /etc/multipath.conf
+  notify: 
+    - Restart mpath service
+
+- name: Load dm_round_robin module
+  community.general.modprobe:
+    name: dm_round_robin
+    state: present
+
+- name: Enable and start multipath service
+  service:
+    name: multipathd
+    state: started
+    enabled: true
+
+- name: Force services to restart
+  ansible.builtin.meta: flush_handlers
+
+- name: config_targets | discovering targets
+  community.general.open_iscsi:
+    portal: "{{ item }}"
+    discover: "{{ target.discover }}"
+    #show_nodes: true
+  loop: "{{ target.portal }}"
+
+- name: Configure targets
+  community.general.open_iscsi:
+    discover: "{{ target.discover }}"
+    login: "{{ target.login }}"
+    portal: "{{ item }}"
+    target: "{{ target.name | default(omit) }}"
+    auto_portal_startup: true
+  loop: "{{ target.portal }}"
+
+

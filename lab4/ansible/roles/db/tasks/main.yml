@@ -1,0 +1,69 @@
+---
+- name: Add MariaDB repo
+  ansible.builtin.yum_repository:
+    name: mariadb
+    description: MariaDB
+    baseurl: "https://mirror.docker.ru/mariadb/yum/{{db_version}}/almalinux9-amd64"
+    gpgkey: https://mirror.docker.ru/mariadb/yum/RPM-GPG-KEY-MariaDB
+    gpgcheck: true
+
+- name: Install MariaDB
+  ansible.builtin.package:
+    name: 
+      - MariaDB-server
+      - MariaDB-client
+    state: present
+  notify: secure db
+
+- name: Start and enable MariaDB
+  ansible.builtin.service:
+    name: mariadb
+    state: started
+    enabled: yes
+
+- name: Install pip
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - python3-pip
+    
+- name: Install PyMySQL python package for Ansible MySQL module
+  ansible.builtin.pip:
+    name: PyMySQL
+
+- ansible.builtin.meta: flush_handlers
+
+- name: Generate .my.cnf for current user (root)
+  ansible.builtin.template:
+    src: root.my.cnf.j2
+    dest: ~/.my.cnf
+    # group: root
+    # owner: root
+    mode: 0600
+
+- name: Creates database for WordPress
+  community.mysql.mysql_db:
+    name: "{{ wp_db }}"
+    encoding: utf8mb4
+    collation: utf8mb4_general_ci
+    state: present
+    # host: localhost
+    login_unix_socket: /var/lib/mysql/mysql.sock
+    login_password: "{{ mariadb_root_password | default('passwd') }}"
+
+- name: Create MariaDB user for WordPress and grant access from all WP hosts
+  community.mysql.mysql_user:
+    name: "{{ wp_db_user }}"
+    password: "{{ wp_db_pass }}"
+    priv: "{{ wp_db }}.*:ALL"
+    column_case_sensitive: true 
+    #host_all: true
+    state: present
+    host: "{{ hostvars[item]['ansible_facts']['default_ipv4']['address']  }}"
+    login_unix_socket: /var/lib/mysql/mysql.sock
+    login_password: "{{ mariadb_root_password | default('passwd') }}"
+  loop: "{{ groups['backend']}}"
+    # - "{{ hostvars[groups['nginx_wp'][0]].ansible_host | default(omit) }}"
+    # - "{{ lookup('ansible.builtin.vars', hostvars[groups['nginx_wp'][1]].ansible_host, default='') }}"
+    #- "{{ hostvars[groups['nginx_wp'][2]].ansible_host | default(omit) }}"
