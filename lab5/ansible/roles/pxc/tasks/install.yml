@@ -1,0 +1,52 @@
+---
+# - name: Remove mariadb-connector-c-config
+#   ansible.builtin.package:
+#     name:
+#       - "mariadb-connector-c-config"
+#     state: absent
+
+- name: Add Percona RPM GPG KEY
+  ansible.builtin.rpm_key:
+    state: present
+    key: "{{ item }}"
+  loop:
+    - https://repo.percona.com/percona/yum/PERCONA-PACKAGING-KEY
+    #- https://repo.percona.com/percona/yum/RPM-GPG-KEY-Percona
+
+- name: Add Percona repository
+  ansible.builtin.package:
+    name: https://repo.percona.com/yum/percona-release-latest.noarch.rpm
+    state: present
+
+- name: Enable Percona repository
+  ansible.builtin.command: "percona-release setup pxc-{{ mysql_version_major }}{{ mysql_version_minor }} -y"
+  when: mysql_version_major|int >= 8
+  changed_when: False     
+
+- name: Enable Percona toolkit
+  ansible.builtin.command: "percona-release enable tools"
+
+- name: Install percona database server
+  ansible.builtin.package:
+    name: 
+      - percona-xtradb-cluster
+      - percona-toolkit
+    state: present
+
+- name: Install MySQL-python package (for Ansible module)
+  ansible.builtin.package:
+    name: python3-PyMySQL
+    state: present
+
+- name: Touch marker
+  ansible.builtin.copy:
+    content: ""
+    dest: ~/pxc-deployment/installed
+
+# - name: "Adjust permissions of datadir"
+#   file:
+#     path: "{{ mysql_datadir }}"
+#     owner: "mysql"
+#     group: "mysql"
+#     mode: 0755
+#     state: "directory"

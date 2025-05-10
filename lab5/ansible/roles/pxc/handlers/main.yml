@@ -1,0 +1,3 @@
+---
+- name: "Restart percona"
+  ansible.builtin.service: "name=mysql state=restarted"

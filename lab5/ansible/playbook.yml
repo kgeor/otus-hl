@@ -1,0 +1,59 @@
+- hosts: all
+  become: true
+  pre_tasks:
+    - name: set timezone to Europe/Moscow
+      timezone:
+        name: Europe/Moscow
+
+    - name: Set static hostname
+      ansible.builtin.hostname:
+        name: "{{ inventory_hostname_short }}"
+
+    # - name: Add FQDN to /etc/hosts
+    #   ansible.builtin.lineinfile:
+    #     dest: /etc/hosts
+    #     regexp: '^127\.0\.1\.1'
+    #     line: "127.0.1.1 {{ inventory_hostname }} {{ inventory_hostname_short }}"
+    
+    - name: Add IP address of all hosts to all hosts
+      ansible.builtin.lineinfile:
+        dest: /etc/hosts
+        regexp: '.*{{ item }}$'
+        line: "{{ hostvars[item].ansible_facts.default_ipv4.address }} {{item}}"
+        state: present
+      #when: item != ansible_hostname
+      loop: "{{ groups.all }}"
+
+    - name: install selinux tools
+      ansible.builtin.package:
+       name:
+         - "python3-libselinux"
+         - "policycoreutils-python-utils"
+
+    - name: Set SELinux to Permissive mode
+      ansible.posix.selinux:
+        state: disabled
+
+- hosts: db
+  become: true     
+  roles:
+    - pxc
+
+- hosts: db_lb
+  become: true     
+  roles:
+    - haproxy
+
+- name: Setup backend servers with WordPress
+  hosts: backend
+  become: true
+  tags: backend
+  roles:
+    - wordpress
+
+- name: Setup NGINX reverse-proxy
+  hosts: nginx_lb
+  become: true
+  tags: frontend
+  roles:
+    - nginx-rp

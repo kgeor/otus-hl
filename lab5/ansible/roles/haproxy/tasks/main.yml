@@ -1,0 +1,25 @@
+---
+
+- name: Install HAProxy
+  ansible.builtin.package:
+    name: haproxy
+    state: present
+ 
+- name: Generate config for haproxy
+  ansible.builtin.template:
+    src: haproxy.cfg.j2
+    dest: /etc/haproxy/haproxy.cfg
+  notify: restart haproxy
+
+- name: Set ownership 
+  ansible.builtin.file:
+    path: /etc/haproxy
+    owner: haproxy
+    group: haproxy
+    recurse: true
+
+- name: Start and enable HAProxy service
+  ansible.builtin.service:
+    name: haproxy
+    state: started
+    enabled: yes

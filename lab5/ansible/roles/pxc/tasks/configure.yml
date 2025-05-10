@@ -1,0 +1,62 @@
+---
+# - name: "Create dir symlink"
+#   ansible.builtin.file:
+#     src: "/usr/share/percona-server"
+#     dest: "/usr/share/mysql"
+#     state: "link"
+- name: Start MySQL services on all nodes
+  ansible.builtin.systemd:
+    name: mysql.service
+    state: started
+
+- name: Check if /root/.my.cnf file exists if installing
+  ansible.builtin.stat:
+    path: "/root/.my.cnf"
+  register: root_my_cnf_stat
+
+
+- name: Parse temporary password from mysql log, getting last one
+  ansible.builtin.shell: "grep 'temporary password' /var/log/mysqld.log | awk '{print $NF}' | tail -n 1" #"cat /var/log/mysqld.log | sed -n 's/.*temporary password is generated for root@localhost: //p' | tail -n1"
+  register: temp_root_pass
+
+- name: set root pass 
+  shell: >-
+    echo "ALTER USER 'root'@'localhost' IDENTIFIED BY '{{ mysql_root_pass }}'; 
+    FLUSH PRIVILEGES;" | mysql -u root --password='{{ temp_root_pass.stdout }}' --connect-expired-password
+    # >-
+    # mysqladmin -u root
+    # --password="{{ temp_root_pass.stdout }}"
+    # password "{{ mysql_root_pass }}"
+  when:
+    - root_my_cnf_stat.stat.exists == False
+
+- name: Copy .my.cnf file into the root home folder
+  ansible.builtin.template:
+    src: root-my-cnf.j2
+    dest: /root/.my.cnf
+    owner: root
+    group: root
+    mode: 0600
+
+- name: Ensure anonymous users are not in the database
+  community.mysql.mysql_user:
+    name: ''
+    host: localhost
+    host_all: true
+    state: absent
+    #login_unix_socket: "{% if ansible_os_family in ['RedHat', 'Rocky'] %}/var/lib/mysql/mysql.sock{% else %}/var/run/mysqld/mysqld.sock{% endif %}"
+
+- name: Remove test database
+  community.mysql.mysql_db:
+    name: test
+    state: absent
+
+- name: Remove remote root
+  community.mysql.mysql_query:
+    query:
+      - DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1')
+
+- name: Touch marker
+  ansible.builtin.copy:
+    content: ""
+    dest: ~/pxc-deployment/configured

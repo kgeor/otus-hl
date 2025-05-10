@@ -1,0 +1,47 @@
+global    
+    maxconn 4000
+    log /dev/log    local0
+    log /dev/log    local1 notice
+    chroot /var/lib/haproxy
+    pidfile     /var/run/haproxy.pid
+    stats socket /var/lib/haproxy/stats
+    user haproxy
+    group haproxy
+    daemon
+
+defaults
+    log global
+    mode tcp
+    option tcplog
+    option dontlognull
+    retries 3
+    option redispatch
+    maxconn 2000
+    timeout queue      5s
+    timeout connect    5s
+    timeout client     60m
+    timeout server     60m
+    timeout check      5s
+
+
+frontend pxc-front
+    bind *:3306
+    mode tcp
+    default_backend pxc-back
+
+frontend stats-front
+    bind *:80
+    mode http
+    default_backend stats-back
+
+backend pxc-back
+    mode tcp
+    balance leastconn
+    option	 mysql-check	user  haproxy_check
+    {% for host in groups['db'] %}
+server {{ hostvars[host]['inventory_hostname'] }} {{ hostvars[host]['inventory_hostname'] }}:3306 check init-addr last,libc,none rise 3 fall 3
+    {% endfor %}
+
+backend stats-back
+    mode http
+    stats uri /haproxy/stats

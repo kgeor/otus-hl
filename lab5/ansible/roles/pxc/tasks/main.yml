@@ -1,0 +1,34 @@
+---
+# - name: "Check settings (RedHat-based)"
+#   ansible.builtin.include_tasks: check_settings.yml
+#   tags: check
+#   when: ansible_os_family in ['RedHat', 'Rocky']
+- name: Touch directory for markers
+  ansible.builtin.file:
+    dest: ~/pxc-deployment
+    state: directory
+
+- name: Get all existing markers
+  ansible.builtin.command: ls -p ~/pxc-deployment
+  register: markers
+
+- name: "Install packets"
+  ansible.builtin.include_tasks: install.yml
+  when: "'installed' not in markers.stdout_lines"
+
+- name: "Configure"
+  ansible.builtin.include_tasks: configure.yml
+  when: "'configured' not in markers.stdout_lines"
+
+# - name: "Secure Percona MySQL installation"
+#   ansible.builtin.include_tasks: secure.yml
+#   tags: securing
+
+- name: "Bootstrap cluster"
+  ansible.builtin.include_tasks: bootstrap.yml
+  when: "'bootstrapped' not in markers.stdout_lines"
+
+- name: "Setup DBs and users"
+  run_once: true
+  ansible.builtin.include_tasks: usersdatabases.yml
+  tags: createdb

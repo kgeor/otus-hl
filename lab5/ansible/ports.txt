@@ -1,0 +1,4 @@
+3306    MySQL client connection and SST (State Snapshot Transfer)
+4444    SST via Percona XtraBackup
+4567    write-set replication traffic (over TCP) and multicast replication (over TCP and UDP)
+4568    IST (Incremental State Transfer)
